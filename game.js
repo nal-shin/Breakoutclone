@@ -18,15 +18,19 @@ const paddle = {
     speed: 8
 };
 
-// ボール
-const ball = {
+// ボール（複数対応）
+const balls = [{
     x: canvas.width / 2,
     y: canvas.height - 50,
     radius: 8,
     dx: 4,
     dy: -4,
     speed: 4
-};
+}];
+
+// アイテム
+const items = [];
+const itemDropChance = 0.3; // 30%の確率でアイテムドロップ
 
 // ブロック
 const blocks = [];
@@ -85,11 +89,17 @@ function startGame() {
 function resetGame() {
     score = 0;
     lives = 3;
-    ball.x = canvas.width / 2;
-    ball.y = canvas.height - 50;
-    ball.dx = 4;
-    ball.dy = -4;
+    balls.length = 0;
+    balls.push({
+        x: canvas.width / 2,
+        y: canvas.height - 50,
+        radius: 8,
+        dx: 4,
+        dy: -4,
+        speed: 4
+    });
     paddle.x = canvas.width / 2 - paddle.width / 2;
+    items.length = 0;
     initBlocks();
     updateDisplay();
 }
@@ -118,40 +128,93 @@ function movePaddle() {
     }
 }
 
-// ボール移動
-function moveBall() {
-    ball.x += ball.dx;
-    ball.y += ball.dy;
+// アイテム作成
+function createItem(x, y) {
+    items.push({
+        x: x,
+        y: y,
+        width: 20,
+        height: 20,
+        dy: 2,
+        type: 'multiBall'
+    });
+}
 
-    // 壁との衝突
-    if (ball.x + ball.radius > canvas.width || ball.x - ball.radius < 0) {
-        ball.dx = -ball.dx;
-    }
-    if (ball.y - ball.radius < 0) {
-        ball.dy = -ball.dy;
-    }
-
-    // パドルとの衝突
-    if (collision(ball, paddle)) {
-        ball.dy = -Math.abs(ball.dy);
-        // パドルの位置による角度変更
-        const hitPos = (ball.x - paddle.x) / paddle.width;
-        ball.dx = ball.speed * (hitPos - 0.5) * 2;
-    }
-
-    // ブロックとの衝突
-    for (let block of blocks) {
-        if (block.visible && collision(ball, block)) {
-            ball.dy = -ball.dy;
-            block.visible = false;
-            score += 10;
-            updateDisplay();
-            break;
+// アイテム移動
+function moveItems() {
+    for (let i = items.length - 1; i >= 0; i--) {
+        const item = items[i];
+        item.y += item.dy;
+        
+        // パドルとの衝突
+        if (collision({x: item.x + item.width/2, y: item.y + item.height/2, radius: item.width/2}, paddle)) {
+            if (item.type === 'multiBall') {
+                // 新しいボールを追加
+                const newBall = {
+                    x: balls[0].x,
+                    y: balls[0].y,
+                    radius: 8,
+                    dx: balls[0].dx + (Math.random() - 0.5) * 4,
+                    dy: balls[0].dy + (Math.random() - 0.5) * 2,
+                    speed: 4
+                };
+                balls.push(newBall);
+            }
+            items.splice(i, 1);
+        } else if (item.y > canvas.height) {
+            // 画面外に出たアイテムを削除
+            items.splice(i, 1);
         }
     }
+}
 
-    // ボールが下に落ちた
-    if (ball.y + ball.radius > canvas.height) {
+// ボール移動
+function moveBalls() {
+    for (let i = balls.length - 1; i >= 0; i--) {
+        const ball = balls[i];
+        ball.x += ball.dx;
+        ball.y += ball.dy;
+
+        // 壁との衝突
+        if (ball.x + ball.radius > canvas.width || ball.x - ball.radius < 0) {
+            ball.dx = -ball.dx;
+        }
+        if (ball.y - ball.radius < 0) {
+            ball.dy = -ball.dy;
+        }
+
+        // パドルとの衝突
+        if (collision(ball, paddle)) {
+            ball.dy = -Math.abs(ball.dy);
+            // パドルの位置による角度変更
+            const hitPos = (ball.x - paddle.x) / paddle.width;
+            ball.dx = ball.speed * (hitPos - 0.5) * 2;
+        }
+
+        // ブロックとの衝突
+        for (let block of blocks) {
+            if (block.visible && collision(ball, block)) {
+                ball.dy = -ball.dy;
+                block.visible = false;
+                score += 10;
+                updateDisplay();
+                
+                // アイテムドロップ判定
+                if (Math.random() < itemDropChance) {
+                    createItem(block.x + block.width / 2 - 10, block.y + block.height);
+                }
+                break;
+            }
+        }
+
+        // ボールが下に落ちた
+        if (ball.y + ball.radius > canvas.height) {
+            balls.splice(i, 1);
+        }
+    }
+    
+    // 全てのボールが落ちた場合
+    if (balls.length === 0) {
         lives--;
         updateDisplay();
         if (lives <= 0) {
@@ -159,10 +222,14 @@ function moveBall() {
             gameStatusElement.innerHTML = '<div class="game-over">ゲームオーバー<br>スペースキーで再開</div>';
             resetGame();
         } else {
-            ball.x = canvas.width / 2;
-            ball.y = canvas.height - 50;
-            ball.dx = 4;
-            ball.dy = -4;
+            balls.push({
+                x: canvas.width / 2,
+                y: canvas.height - 50,
+                radius: 8,
+                dx: 4,
+                dy: -4,
+                speed: 4
+            });
             gameRunning = false;
             gameStatusElement.innerHTML = '<div style="color: white;">スペースキーでボールを発射</div>';
         }
@@ -189,11 +256,28 @@ function draw() {
     ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
 
     // ボール描画
-    ctx.beginPath();
-    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
     ctx.fillStyle = '#fff';
-    ctx.fill();
-    ctx.closePath();
+    for (let ball of balls) {
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.closePath();
+    }
+    
+    // アイテム描画
+    for (let item of items) {
+        ctx.fillStyle = '#ffd700';
+        ctx.fillRect(item.x, item.y, item.width, item.height);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(item.x, item.y, item.width, item.height);
+        
+        // アイテムの中に「+」マークを描画
+        ctx.fillStyle = '#fff';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('+', item.x + item.width/2, item.y + item.height/2 + 5);
+    }
 
     // ブロック描画
     for (let block of blocks) {
@@ -211,7 +295,8 @@ function draw() {
 function gameLoop() {
     if (gameRunning) {
         movePaddle();
-        moveBall();
+        moveBalls();
+        moveItems();
         checkGameClear();
     }
     draw();
