@@ -31,6 +31,17 @@ const balls = [{
 // アイテム
 const items = [];
 const itemDropChance = 0.3; // 30%の確率でアイテムドロップ
+const itemTypes = [
+    { type: 'multiBall', color: '#ffd700', symbol: '+', effect: 'ボール追加' },
+    { type: 'speedUp', color: '#ff6b6b', symbol: '↑', effect: 'スピードアップ' },
+    { type: 'paddleExpand', color: '#51cf66', symbol: '↔', effect: 'パドル拡大' }
+];
+
+// パドルの効果時間管理
+let paddleExpandTimer = 0;
+let paddleOriginalWidth = 120;
+let ballSpeedMultiplier = 1;
+let speedUpTimer = 0;
 
 // ブロック
 const blocks = [];
@@ -130,13 +141,16 @@ function movePaddle() {
 
 // アイテム作成
 function createItem(x, y) {
+    const randomItemType = itemTypes[Math.floor(Math.random() * itemTypes.length)];
     items.push({
         x: x,
         y: y,
         width: 20,
         height: 20,
         dy: 2,
-        type: 'multiBall'
+        type: randomItemType.type,
+        color: randomItemType.color,
+        symbol: randomItemType.symbol
     });
 }
 
@@ -159,11 +173,49 @@ function moveItems() {
                     speed: 4
                 };
                 balls.push(newBall);
+            } else if (item.type === 'speedUp') {
+                // スピードアップ（10秒間）
+                ballSpeedMultiplier = 1.5;
+                speedUpTimer = 600; // 60fps × 10秒
+                for (let ball of balls) {
+                    ball.dx *= 1.5;
+                    ball.dy *= 1.5;
+                }
+            } else if (item.type === 'paddleExpand') {
+                // パドル拡大（15秒間）
+                if (paddleExpandTimer <= 0) {
+                    paddle.width = paddleOriginalWidth * 1.5;
+                }
+                paddleExpandTimer = 900; // 60fps × 15秒
             }
             items.splice(i, 1);
         } else if (item.y > canvas.height) {
             // 画面外に出たアイテムを削除
             items.splice(i, 1);
+        }
+    }
+}
+
+// エフェクト管理
+function updateEffects() {
+    // スピードアップ効果の時間管理
+    if (speedUpTimer > 0) {
+        speedUpTimer--;
+        if (speedUpTimer === 0) {
+            // スピードを元に戻す
+            for (let ball of balls) {
+                ball.dx /= ballSpeedMultiplier;
+                ball.dy /= ballSpeedMultiplier;
+            }
+            ballSpeedMultiplier = 1;
+        }
+    }
+    
+    // パドル拡大効果の時間管理
+    if (paddleExpandTimer > 0) {
+        paddleExpandTimer--;
+        if (paddleExpandTimer === 0) {
+            paddle.width = paddleOriginalWidth;
         }
     }
 }
@@ -226,8 +278,8 @@ function moveBalls() {
                 x: canvas.width / 2,
                 y: canvas.height - 50,
                 radius: 8,
-                dx: 4,
-                dy: -4,
+                dx: 4 * ballSpeedMultiplier,
+                dy: -4 * ballSpeedMultiplier,
                 speed: 4
             });
             gameRunning = false;
@@ -266,17 +318,32 @@ function draw() {
     
     // アイテム描画
     for (let item of items) {
-        ctx.fillStyle = '#ffd700';
+        ctx.fillStyle = item.color;
         ctx.fillRect(item.x, item.y, item.width, item.height);
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 2;
         ctx.strokeRect(item.x, item.y, item.width, item.height);
         
-        // アイテムの中に「+」マークを描画
+        // アイテムの中にシンボルを描画
         ctx.fillStyle = '#fff';
         ctx.font = '14px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('+', item.x + item.width/2, item.y + item.height/2 + 5);
+        ctx.fillText(item.symbol, item.x + item.width/2, item.y + item.height/2 + 5);
+    }
+    
+    // エフェクト表示
+    if (speedUpTimer > 0) {
+        ctx.fillStyle = '#ff6b6b';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(`スピードアップ: ${Math.ceil(speedUpTimer/60)}s`, 10, 30);
+    }
+    
+    if (paddleExpandTimer > 0) {
+        ctx.fillStyle = '#51cf66';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(`パドル拡大: ${Math.ceil(paddleExpandTimer/60)}s`, 10, speedUpTimer > 0 ? 50 : 30);
     }
 
     // ブロック描画
@@ -297,6 +364,7 @@ function gameLoop() {
         movePaddle();
         moveBalls();
         moveItems();
+        updateEffects();
         checkGameClear();
     }
     draw();
