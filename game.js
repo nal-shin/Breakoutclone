@@ -8,6 +8,7 @@ const gameStatusElement = document.getElementById('gameStatus');
 let gameRunning = false;
 let score = 0;
 let lives = 3;
+let gameState = 'waiting'; // 'waiting', 'playing', 'gameOver', 'gameClear'
 
 // パドル
 const paddle = {
@@ -80,7 +81,10 @@ document.addEventListener('keydown', (e) => {
     keys[e.key] = true;
     if (e.key === ' ') {
         e.preventDefault();
-        if (!gameRunning) {
+        if (!gameRunning || gameState === 'gameOver' || gameState === 'gameClear') {
+            if (gameState === 'gameOver' || gameState === 'gameClear') {
+                resetGame();
+            }
             startGame();
         }
     }
@@ -93,13 +97,16 @@ document.addEventListener('keyup', (e) => {
 // ゲーム開始
 function startGame() {
     gameRunning = true;
+    gameState = 'playing';
     gameStatusElement.innerHTML = '';
 }
 
 // ゲーム初期化
 function resetGame() {
-    score = 0;
-    lives = 3;
+    if (gameState === 'gameOver' || gameState === 'gameClear') {
+        score = 0;
+        lives = 3;
+    }
     balls.length = 0;
     balls.push({
         x: canvas.width / 2,
@@ -113,6 +120,9 @@ function resetGame() {
     items.length = 0;
     initBlocks();
     updateDisplay();
+    if (gameState !== 'gameOver' && gameState !== 'gameClear') {
+        gameState = 'waiting';
+    }
 }
 
 // 表示更新
@@ -271,7 +281,8 @@ function moveBalls() {
         updateDisplay();
         if (lives <= 0) {
             gameRunning = false;
-            gameStatusElement.innerHTML = '<div class="game-over">ゲームオーバー<br>スペースキーで再開</div>';
+            gameState = 'gameOver';
+            gameStatusElement.innerHTML = '';
             resetGame();
         } else {
             balls.push({
@@ -283,7 +294,8 @@ function moveBalls() {
                 speed: 4
             });
             gameRunning = false;
-            gameStatusElement.innerHTML = '<div style="color: white;">スペースキーでボールを発射</div>';
+            gameState = 'waiting';
+            gameStatusElement.innerHTML = '';
         }
     }
 }
@@ -293,7 +305,8 @@ function checkGameClear() {
     const visibleBlocks = blocks.filter(block => block.visible);
     if (visibleBlocks.length === 0) {
         gameRunning = false;
-        gameStatusElement.innerHTML = '<div class="game-clear">ゲームクリア！<br>スペースキーで再開</div>';
+        gameState = 'gameClear';
+        gameStatusElement.innerHTML = '';
         resetGame();
     }
 }
@@ -356,6 +369,42 @@ function draw() {
             ctx.strokeRect(block.x, block.y, block.width, block.height);
         }
     }
+    
+    // ゲーム状態テキスト描画
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
+    const scale = window.gameScale || 1;
+    
+    if (gameState === 'waiting') {
+        ctx.font = `${24 * scale}px Arial`;
+        ctx.fillText('スペースキーでゲーム開始', canvas.width / 2, canvas.height / 2 + 100 * scale);
+    } else if (gameState === 'gameOver') {
+        // 半透明の背景
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // ゲームオーバーテキスト
+        ctx.fillStyle = '#ff6b6b';
+        ctx.font = `bold ${48 * scale}px Arial`;
+        ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 30 * scale);
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = `${24 * scale}px Arial`;
+        ctx.fillText('スペースキーで再開', canvas.width / 2, canvas.height / 2 + 30 * scale);
+    } else if (gameState === 'gameClear') {
+        // 半透明の背景
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // ゲームクリアテキスト
+        ctx.fillStyle = '#51cf66';
+        ctx.font = `bold ${48 * scale}px Arial`;
+        ctx.fillText('GAME CLEAR!', canvas.width / 2, canvas.height / 2 - 30 * scale);
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = `${24 * scale}px Arial`;
+        ctx.fillText('スペースキーで再開', canvas.width / 2, canvas.height / 2 + 30 * scale);
+    }
 }
 
 // ゲームループ
@@ -373,5 +422,4 @@ function gameLoop() {
 
 // ゲーム初期化と開始
 resetGame();
-gameStatusElement.innerHTML = '<div style="color: white;">スペースキーでゲーム開始</div>';
 gameLoop();
